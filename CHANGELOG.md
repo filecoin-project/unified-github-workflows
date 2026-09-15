@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.0.44] - 2026-09-15
+### Fixed
+- reject multiline release version values and avoid unsafe prefix matching in release workflows
+
 ## [1.0.43] - 2026-08-29
 ### Added
 - fix CGO value in go-test workflow

@@ -45,21 +45,38 @@ jobs:
           SOURCE: ${{ matrix.source }}
           SEPARATOR: ${{ inputs.separator }}
         run: |
+          set_output() {
+            local name="$1"
+            local value="$2"
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "::error::$name must not contain newlines"
+              exit 1
+            fi
+            printf '%s=%s\n' "$name" "$value" | tee -a "$GITHUB_OUTPUT"
+          }
           root="$(dirname "$SOURCE")"
           source="$(basename "$SOURCE")"
-          echo "root=$root" | tee -a $GITHUB_OUTPUT
-          echo "source=$source" | tee -a $GITHUB_OUTPUT
+          set_output root "$root"
+          set_output source "$source"
           if [[ "$root" == "." ]]; then
             prefix="v"
           else
             name="$(yq -r '.package.name // .name // "'"$root"'"' "$root/$source")"
             prefix="${name}${SEPARATOR}v"
           fi
-          echo "prefix=$prefix" | tee -a $GITHUB_OUTPUT
+          if [[ ! "$prefix" =~ ^[A-Za-z0-9._/@+-]+$ ]]; then
+            echo "::error::prefix contains unsupported characters"
+            exit 1
+          fi
+          set_output prefix "$prefix"
           while [[ -z "$version" ]]; do
             echo "Checking $root/$source"
             if [[ -f "$root/$source" ]]; then
               version="$(yq -r '.workspace.package.version // .package.version // .version | select(type == "!!str")' "$root/$source")"
+              if [[ "$version" == *$'\n'* || "$version" == *$'\r'* ]]; then
+                echo "::error::version must not contain newlines"
+                exit 1
+              fi
               version="${version#v}"
             fi
             if [[ "$root" == "." ]]; then
@@ -67,12 +84,12 @@ jobs:
             fi
             root="$(dirname "$root")"
           done
-          echo "version=$version" | tee -a $GITHUB_OUTPUT
+          set_output version "$version"
           tag="${prefix}${version}"
-          echo "tag=$tag" | tee -a $GITHUB_OUTPUT
+          set_output tag "$tag"
           suffix="${version#*[-+]}"
           suffix="${suffix#"$version"}"
-          echo "suffix=$suffix" | tee -a $GITHUB_OUTPUT
+          set_output suffix "$suffix"
       - id: latest
         if: steps.version.outputs.version != ''
         name: Determine latest version (only final versions)
@@ -81,7 +98,19 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           git fetch origin --tags
-          echo -e "${TAG}\n$(git tag)" | grep "^${PREFIX}" | grep -v - | sort -V | tail -n1 | xargs -I{} echo "latest={}" | tee -a $GITHUB_OUTPUT
+          latest=$(
+            {
+              printf '%s\n' "$TAG"
+              git tag
+            } | while IFS= read -r tag; do
+              if [[ "$tag" == "$PREFIX"* && "$tag" != *-* ]]; then
+                printf '%s\n' "$tag"
+              fi
+            done | sort -V | tail -n1
+          )
+          if [[ -n "$latest" ]]; then
+            printf 'latest=%s\n' "$latest" | tee -a "$GITHUB_OUTPUT"
+          fi
       - id: branch
         name: Check if the branch is a release branch
         if: steps.version.outputs.version != ''
