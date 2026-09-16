@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.0.45] - 2026-09-16
+### Added
+- allow the `releaser` workflow to release a specific SHA while evaluating release policy against a separate ref
+
 ## [1.0.44] - 2026-09-15
 ### Fixed
 - reject multiline release version values and avoid unsafe prefix matching in release workflows
